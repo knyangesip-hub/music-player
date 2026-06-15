@@ -194,14 +194,27 @@ class MusicPlayer:
         pygame.mixer.music.set_volume(self.volume)
 
     def _init_gpio(self):
+        # Clear any stale edge-detection state left by a previous (crashed) run.
+        # Without this, RPi.GPIO raises "Failed to add edge detection" on restart.
+        GPIO.cleanup()
+
         GPIO.setmode(GPIO.BCM)
         for pin in ALL_BUTTONS:
             GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-        GPIO.add_event_detect(BTN_A, GPIO.FALLING, callback=self._cb_play_pause, bouncetime=300)
-        GPIO.add_event_detect(BTN_B, GPIO.FALLING, callback=self._cb_next,       bouncetime=300)
-        GPIO.add_event_detect(BTN_X, GPIO.FALLING, callback=self._cb_prev,       bouncetime=300)
-        GPIO.add_event_detect(BTN_Y, GPIO.FALLING, callback=self._cb_volume,     bouncetime=300)
+        callbacks = {
+            BTN_A: self._cb_play_pause,
+            BTN_B: self._cb_next,
+            BTN_X: self._cb_prev,
+            BTN_Y: self._cb_volume,
+        }
+        for pin, cb in callbacks.items():
+            # Defensive remove — safe to call even if no detection exists yet.
+            try:
+                GPIO.remove_event_detect(pin)
+            except Exception:
+                pass
+            GPIO.add_event_detect(pin, GPIO.FALLING, callback=cb, bouncetime=300)
 
     # ── Button callbacks (called from GPIO interrupt thread) ─────────────────
 
